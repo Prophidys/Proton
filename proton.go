@@ -5,16 +5,37 @@ import "github.com/mitchellh/goamz/aws"
 import "encoding/json"
 import "os"
 import "github.com/codegangsta/cli"
+import "io/ioutil"
 
 // import "github.com/ncw/swift"
 import "github.com/mitchellh/goamz/s3"
 import "log"
 
-type Configuration struct {
-	ObjectEndPoint  string
+type ObjectStore interface {
+	Auth() bool
+	ListBucket() string
+	CreateBucket() string
+	DeleteBucket() string
+	Put() string
+	Get() string
+	Del() string
+}
+
+type ObjectStoreService struct {
+	ObjectStore string
+	AuthInfo    json.RawMessage
+}
+
+type AWS_S3 struct {
 	AccessKey       string
 	SecretAccessKey string
-	Region          string
+}
+
+type OS_Swift struct {
+	Login       string
+	Password    string
+	TenantID    string
+	EndPointURL string
 }
 
 func main() {
@@ -57,6 +78,7 @@ func main() {
 }
 
 func loadConfig() {
+	var oss ObjectStoreService
 	var filename = ""
 	if os.Getenv("PROTON_CONFIG") != "" {
 		filename = os.Getenv("PROTON_CONFIG")
@@ -69,17 +91,26 @@ func loadConfig() {
 	} else {
 		log.Fatal("Config file not found")
 	}
-	file, _ := os.Open(filename)
-	decoder := json.NewDecoder(file)
-	configuration := Configuration{}
-	err := decoder.Decode(&configuration)
+	file, _ := ioutil.ReadFile(filename)
+	err := json.Unmarshal(file, &oss)
+	var dst interface{}
+	switch oss.ObjectStore {
+	case "s3":
+		dst = new(AWS_S3)
+	case "swift":
+		dst = new(OS_Swift)
+	}
 
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-
-	os.Setenv("AWS_ACCESS_KEY", configuration.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", configuration.SecretAccessKey)
+	json.Unmarshal(oss.AuthInfo, dst)
+	if oss.ObjectStore == "s3" {
+		var dstf *AWS_S3 = dst.(*AWS_S3)
+		fmt.Println(fmt.Sprintf("%+v %+v", dstf.AccessKey, dstf.SecretAccessKey))
+		os.Setenv("AWS_ACCESS_KEY", dstf.AccessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", dstf.SecretAccessKey)
+	}
 }
 
 func listBuckets() {
