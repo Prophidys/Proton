@@ -18,6 +18,7 @@ type Configuration struct {
 }
 
 func main() {
+	loadConfig()
 	app := cli.NewApp()
 	app.Name = "proton"
 	app.Usage = "Object Storage Abstractor"
@@ -55,8 +56,20 @@ func main() {
 	app.Run(os.Args)
 }
 
-func listBuckets() {
-	file, _ := os.Open("proton.cfg")
+func loadConfig() {
+	var filename = ""
+	if os.Getenv("PROTON_CONFIG") != "" {
+		filename = os.Getenv("PROTON_CONFIG")
+	} else if _, err := os.Stat("/etc/proton/proton.cfg"); !os.IsNotExist(err) {
+		filename = "/etc/proton/proton.cfg"
+	} else if _, err := os.Stat("~/.proton/proton.cfg"); !os.IsNotExist(err) {
+		filename = "~/.proton/proton.cfg"
+	} else if _, err := os.Stat("proton.cfg"); !os.IsNotExist(err) {
+		filename = "proton.cfg"
+	} else {
+		log.Fatal("Config file not found")
+	}
+	file, _ := os.Open(filename)
 	decoder := json.NewDecoder(file)
 	configuration := Configuration{}
 	err := decoder.Decode(&configuration)
@@ -67,7 +80,9 @@ func listBuckets() {
 
 	os.Setenv("AWS_ACCESS_KEY", configuration.AccessKey)
 	os.Setenv("AWS_SECRET_ACCESS_KEY", configuration.SecretAccessKey)
+}
 
+func listBuckets() {
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		log.Fatal(err)
@@ -85,18 +100,6 @@ func listBuckets() {
 }
 
 func createBucket(bucketName string) {
-	file, _ := os.Open("proton.cfg")
-	decoder := json.NewDecoder(file)
-	configuration := Configuration{}
-	err := decoder.Decode(&configuration)
-
-	if err != nil {
-		fmt.Println("error:", err)
-	}
-
-	os.Setenv("AWS_ACCESS_KEY", configuration.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", configuration.SecretAccessKey)
-
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		log.Fatal(err)
@@ -112,18 +115,6 @@ func createBucket(bucketName string) {
 }
 
 func deleteBucket(bucketName string) {
-	file, _ := os.Open("proton.cfg")
-	decoder := json.NewDecoder(file)
-	configuration := Configuration{}
-	err := decoder.Decode(&configuration)
-
-	if err != nil {
-		fmt.Println("error:", err)
-	}
-
-	os.Setenv("AWS_ACCESS_KEY", configuration.AccessKey)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", configuration.SecretAccessKey)
-
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		log.Fatal(err)
