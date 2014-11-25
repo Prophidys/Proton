@@ -53,7 +53,7 @@ func (s *OS_Swift) DeleteBucket(bucketName string) string {
 	return "Swift Delete Bucket"
 }
 
-func (s *OS_Swift) Put(path string, object string) string {
+func (s *OS_Swift) Put(src string, dst string) string {
 	//_, err := s.SwiftHandler.ObjectPut(container string, objectName string, contents io.Reader, checkHash bool, Hash string, contentType string, h Headers)
 	return "Swift Put Object"
 }

@@ -12,7 +12,7 @@ type ObjectStore interface {
 	ListBuckets() string
 	CreateBucket(bucketName string) string
 	DeleteBucket(bucketName string) string
-	Put() string
+	Put(src string, dst string) string
 	Get() string
 	Del() string
 }
@@ -84,6 +84,8 @@ func loadConfig() ObjectStore {
 		objstore = new(AWS_S3)
 	case "swift":
 		objstore = new(OS_Swift)
+	case "local":
+		objstore = new(Local)
 	}
 
 	if err != nil {

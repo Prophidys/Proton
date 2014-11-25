@@ -56,7 +56,7 @@ func (s *AWS_S3) DeleteBucket(bucketName string) string {
 	return "S3 Delete Bucket"
 }
 
-func (s *AWS_S3) Put() string {
+func (s *AWS_S3) Put(src string, dst string) string {
 	return "S3 Put Object"
 }
 
