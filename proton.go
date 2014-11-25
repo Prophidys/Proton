@@ -12,10 +12,10 @@ import "github.com/mitchellh/goamz/s3"
 import "log"
 
 type ObjectStore interface {
-	Auth() bool
-	ListBucket() string
-	CreateBucket() string
-	DeleteBucket() string
+	Auth() string
+	ListBuckets() string
+	CreateBucket(bucketName string) string
+	DeleteBucket(bucketName string) string
 	Put() string
 	Get() string
 	Del() string
@@ -27,8 +27,63 @@ type ObjectStoreService struct {
 }
 
 type AWS_S3 struct {
-	AccessKey       string
-	SecretAccessKey string
+	AccessKey         string
+	SecretAccessKey   string
+	AuthHandler       aws.Auth
+	ConnectionHandler *s3.S3
+}
+
+func (s *AWS_S3) Auth() string {
+	var err error
+	os.Setenv("AWS_ACCESS_KEY", s.AccessKey)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", s.SecretAccessKey)
+	s.AuthHandler, err = aws.EnvAuth()
+	if err != nil {
+		log.Fatal(err)
+	}
+	s.ConnectionHandler = s3.New(s.AuthHandler, aws.EUWest)
+	return "S3 Auth"
+}
+
+func (s *AWS_S3) ListBuckets() string {
+	resp, err := s.ConnectionHandler.ListBuckets()
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := range resp.Buckets {
+		fmt.Println(fmt.Sprintf("%+v", resp.Buckets[i].Name))
+	}
+	return "S3 ListBucket"
+}
+
+func (s *AWS_S3) CreateBucket(bucketName string) string {
+	bucket := s.ConnectionHandler.Bucket(bucketName)
+	err := bucket.PutBucket(s3.Private)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return "S3 Create Bucket"
+}
+
+func (s *AWS_S3) DeleteBucket(bucketName string) string {
+	bucket := s.ConnectionHandler.Bucket(bucketName)
+	err := bucket.DelBucket()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return "S3 Delete Bucket"
+}
+
+func (s *AWS_S3) Put() string {
+	return "S3 Put Object"
+}
+
+func (s *AWS_S3) Get() string {
+	return "S3 Get Object"
+}
+
+func (s *AWS_S3) Del() string {
+	return "S3 Put Object"
 }
 
 type OS_Swift struct {
@@ -39,7 +94,8 @@ type OS_Swift struct {
 }
 
 func main() {
-	loadConfig()
+	objstore := loadConfig()
+	objstore.Auth()
 	app := cli.NewApp()
 	app.Name = "proton"
 	app.Usage = "Object Storage Abstractor"
@@ -53,7 +109,7 @@ func main() {
 			ShortName: "l",
 			Usage:     "list all avaiable buckets/container",
 			Action: func(c *cli.Context) {
-				listBuckets()
+				objstore.ListBuckets()
 			},
 		},
 		{
@@ -61,7 +117,7 @@ func main() {
 			ShortName: "d",
 			Usage:     "delete a bucket/container",
 			Action: func(c *cli.Context) {
-				deleteBucket(c.Args().First())
+				objstore.DeleteBucket(c.Args().First())
 			},
 		},
 		{
@@ -69,7 +125,7 @@ func main() {
 			ShortName: "c",
 			Usage:     "create a bucket/container",
 			Action: func(c *cli.Context) {
-				createBucket(c.Args().First())
+				objstore.CreateBucket(c.Args().First())
 			},
 		},
 	}
@@ -77,7 +133,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func loadConfig() {
+func loadConfig() ObjectStore {
 	var oss ObjectStoreService
 	var filename = ""
 	if os.Getenv("PROTON_CONFIG") != "" {
@@ -93,69 +149,17 @@ func loadConfig() {
 	}
 	file, _ := ioutil.ReadFile(filename)
 	err := json.Unmarshal(file, &oss)
-	var dst interface{}
+	var objstore ObjectStore
 	switch oss.ObjectStore {
 	case "s3":
-		dst = new(AWS_S3)
+		objstore = new(AWS_S3)
 	case "swift":
-		dst = new(OS_Swift)
+		//		objstore = new(OS_Swift)
 	}
 
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	json.Unmarshal(oss.AuthInfo, dst)
-	if oss.ObjectStore == "s3" {
-		var dstf *AWS_S3 = dst.(*AWS_S3)
-		fmt.Println(fmt.Sprintf("%+v %+v", dstf.AccessKey, dstf.SecretAccessKey))
-		os.Setenv("AWS_ACCESS_KEY", dstf.AccessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", dstf.SecretAccessKey)
-	}
-}
-
-func listBuckets() {
-	auth, err := aws.EnvAuth()
-	if err != nil {
-		log.Fatal(err)
-	}
-	client := s3.New(auth, aws.USEast)
-	resp, err := client.ListBuckets()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for i := range resp.Buckets {
-		fmt.Println(fmt.Sprintf("%+v", resp.Buckets[i].Name))
-	}
-}
-
-func createBucket(bucketName string) {
-	auth, err := aws.EnvAuth()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client := s3.New(auth, aws.USEast)
-	test := client.Bucket(bucketName)
-	fmt.Println(fmt.Sprintf("%+v", test))
-	err2 := test.PutBucket(s3.Private)
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-}
-
-func deleteBucket(bucketName string) {
-	auth, err := aws.EnvAuth()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client := s3.New(auth, aws.USEast)
-	test := client.Bucket(bucketName)
-	fmt.Println(fmt.Sprintf("%+v", test))
-	err2 := test.DelBucket()
-	if err2 != nil {
-		log.Fatal(err2)
-	}
+	json.Unmarshal(oss.AuthInfo, objstore)
+	return objstore
 }
